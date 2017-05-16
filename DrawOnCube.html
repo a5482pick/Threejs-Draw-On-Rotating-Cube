@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+     <head>
+          <style>
+		body {
+			margin: 0px;
+			background-color: #050505;
+			color: #fff;
+			overflow: hidden;
+		     }
+
+		     #drawing-canvas {
+		        position: fixed;
+			background-color: #000000;
+			top: 100px;
+			right: 0px;
+			z-index: 3000;
+			cursor: crosshair;
+ 		     }
+
+                     #drawing-canvasB {
+			position: fixed;
+			background-color: #0000FF;
+			top: 228px;
+			right: 0px;
+			z-index: 3000;
+			cursor: crosshair;
+		     }
+
+                        
+          </style>
+     </head>
+     <body>
+                
+          <canvas id="drawing-canvas" height="128" width="128"></canvas>
+          <canvas id="drawing-canvasB" height="128" width="128"></canvas>
+          <canvas id="rotated-canvas" height="128" width="128"></canvas>
+          <canvas id="rotated-canvasB" height="128" width="128"></canvas>
+
+          <script src="three.js"></script>
+          <script>
+
+          var camera, scene, renderer, mesh, leftOf, topOf;
+          var drawingCanvas, drawingContext, drawingCanvasB, drawingContextB, rotatedCanvas, rotatedContext, rotatedCanvasB, rotatedContextB;
+
+          //2 variables for 2 canvases.  The var is true when the mouse hovers over the relevant canvas.
+          var paint = false;
+          var paintB = false;
+                    
+          //An array to hold 6 materials, one for each of the box's faces.    
+          var material = [];
+
+          //These variables register the original mouse's position on the canvas.
+          var originalPos = { x : 0, y : 0};
+          var originalPosB = {x : 0, y : 0};
+			
+          init();
+	  setupCanvasDrawing();
+	  animate();
+
+	  function init() {
+
+	       camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 2000 );
+	       camera.position.z = 400;
+ 
+               scene = new THREE.Scene();
+
+	       geometry = new THREE.BoxGeometry( 200, 200, 200 );
+
+	       //Each component added to the array represents the material on one of the box's 6 faces.		
+	       material.push(new THREE.MeshBasicMaterial());
+	       material.push(new THREE.MeshBasicMaterial());
+	       material.push(new THREE.MeshBasicMaterial());
+	       material.push(new THREE.MeshBasicMaterial());
+	       material.push(new THREE.MeshBasicMaterial());
+	       material.push(new THREE.MeshBasicMaterial());
+
+
+	       mesh = new THREE.Mesh( geometry, material );
+	       scene.add( mesh );
+
+	       renderer = new THREE.WebGLRenderer( { antialias: true } );
+	       renderer.setPixelRatio( window.devicePixelRatio );
+	       renderer.setSize( window.innerWidth, window.innerHeight );
+	       document.body.appendChild( renderer.domElement );
+
+          }
+
+		
+	  function setupCanvasDrawing() {  
+	
+               //'drawing-canvas','drawing-canvasB' are red and green canvases respectively.  They trace the mouse's path as
+               //it passes over them.  They are on the right edge of the screen.
+	       drawingCanvas = document.getElementById( 'drawing-canvas' );
+	       drawingContext = drawingCanvas.getContext( '2d' );
+
+               drawingCanvasB = document.getElementById( 'drawing-canvasB' );
+	       drawingContextB = drawingCanvasB.getContext( '2d' );
+
+               //These 2 canvases will be rotated captures of the 2 above canvases.  They update in real time.
+               rotatedCanvas = document.getElementById( 'rotated-canvas' );
+               rotatedContext = rotatedCanvas.getContext( '2d' );
+
+               rotatedCanvasB = document.getElementById( 'rotated-canvasB' );
+               rotatedContextB = rotatedCanvasB.getContext( '2d' );
+
+
+	       drawingContext.fillStyle = "#FF0000";
+	       drawingContext.fillRect( 0, 0, 128, 128 );
+
+               drawingContextB.fillStyle = "#00FF00";
+	       drawingContextB.fillRect( 0, 0, 128, 128 );
+
+	       rotatedContext.fillStyle = "#FF0000";
+	       rotatedContext.fillRect( 0, 0, 128, 128 );
+
+               rotatedContextB.fillStyle = "#00FF00";
+	       rotatedContextB.fillRect( 0, 0, 128, 128 );
+
+	       //We'll only draw on the faces indexed 0 and 2.  These lines connect the 2d canvas to the 3d rendering.		
+	       material[0].map = new THREE.Texture( rotatedCanvas ); 
+
+               material[2].map = new THREE.Texture( rotatedCanvasB );
+
+	       material[0].map.needsUpdate = true;
+               material[2].map.needsUpdate = true;
+
+               //Only trace when mouse is over 'drawing-canvas', 'drawing-canvasB'.
+	       drawingCanvasB.addEventListener('mouseenter',function(e) {  paintB = true;  });
+               drawingCanvasB.addEventListener('mouseleave', function(e) {  paintB = false;  });
+
+               drawingCanvas.addEventListener('mouseenter',function(e) {   paint = true;   });
+               drawingCanvas.addEventListener('mouseleave', function(e) {   paint = false;   });
+
+
+               //Listen for all movements of the mouse.
+	       document.addEventListener( 'mousemove', function( e ) {
+
+                    //The position of the mouse on the canvas is relative to the canvas's top left corner.
+                    leftOf = e.pageX-drawingCanvasB.getBoundingClientRect().left;
+	            topOf = e.pageY - drawingCanvasB.getBoundingClientRect().top;
+
+                    //Call the function that performs the drawing.
+		    drawB(drawingContextB, leftOf, topOf);
+
+                    leftOf = e.pageX-drawingCanvas.getBoundingClientRect().left;
+		    topOf = e.pageY - drawingCanvas.getBoundingClientRect().top;
+
+	            draw(drawingContext, leftOf, topOf);
+               } );
+          }
+
+          //The live rotations of the mouse motions are rendered here on the rotated contexts.
+          function drawRotatedB()   {
+
+               //Move to the square's centre for rotation.
+               rotatedContextB.moveTo(0,0);
+               rotatedContextB.translate(rotatedCanvasB.width/2,rotatedCanvasB.height/2);
+               rotatedContextB.rotate(Math.PI/2);
+               rotatedContextB.translate(-rotatedCanvasB.width/2,-rotatedCanvasB.height/2);
+               rotatedContextB.drawImage(drawingCanvasB, 0, 0);
+
+               //Perform the update.
+               material[2].map.needsUpdate = true;
+
+               //Return.
+               rotatedContextB.moveTo(0,0);
+               rotatedContextB.translate(rotatedCanvasB.width/2,rotatedCanvasB.height/2);
+               rotatedContextB.rotate(-Math.PI/2);
+               rotatedContextB.translate(-rotatedCanvasB.width/2,-rotatedCanvasB.height/2);
+          }
+
+          //The other rotated mapping of the associated canvas's traversal. (See above.)
+          function drawRotated()   {
+
+               rotatedContext.moveTo(0,0);
+               rotatedContext.translate(rotatedCanvas.width/2,rotatedCanvas.height/2);
+               rotatedContext.rotate(-Math.PI);
+               rotatedContext.translate(-rotatedCanvas.width/2,-rotatedCanvas.height/2);
+               rotatedContext.drawImage(drawingCanvas, 0, 0);
+                
+               material[0].map.needsUpdate = true;
+
+               rotatedContext.moveTo(0,0);
+               rotatedContext.translate(rotatedCanvas.width/2,rotatedCanvas.height/2);
+               rotatedContext.rotate(-Math.PI);
+               rotatedContext.translate(-rotatedCanvas.width/2,-rotatedCanvas.height/2);
+          }
+
+          //Draw on the traced canvases, and call the rotating function.
+          function draw( drawContext, x, y ) {
+
+               //Be sure to start drawing from the mouse's prior position.
+               drawContext.moveTo(originalPos.x, originalPos.y);
+            
+               //Only draw if we are over a relevant canvas.
+               if (paint) {
+
+	            drawContext.strokeStyle = '#0000FF';
+		    drawContext.lineTo( x, y );
+                    drawContext.stroke();
+
+                    drawRotated();
+               }
+                                
+               originalPos.x = x;
+               originalPos.y = y;                          
+          }
+
+          //As above, but for second canvas.
+          function drawB( drawContext, x, y ) {
+
+               drawContext.moveTo( originalPosB.x, originalPosB.y );
+          
+               if (paintB) {
+				
+                    drawContext.strokeStyle = '#0000FF';
+	            drawContext.lineTo( x, y );
+	            drawContext.stroke();
+
+                    drawRotatedB();  
+               }
+		
+               originalPosB.x = x;
+               originalPosB.y = y;       
+          }
+
+          //Let the cube move automatically.
+          function animate() {
+
+	       requestAnimationFrame( animate );
+
+	       mesh.rotation.x += 0.01;
+	       mesh.rotation.y += 0.01;
+               
+               renderer.render( scene, camera );
+          }
+
+          </script>
+     </body>
+</html>
